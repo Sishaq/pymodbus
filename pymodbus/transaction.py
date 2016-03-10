@@ -4,6 +4,7 @@ Collection of transaction based abstractions
 import sys
 import struct
 import socket
+import time
 from binascii import b2a_hex, a2b_hex
 
 from pymodbus.exceptions import ModbusIOException
@@ -60,15 +61,17 @@ class ModbusTransactionManager(object):
 
         while retries > 0:
             try:
+                start_time = time.time()
                 self.client.connect()
                 self.client._send(self.client.framer.buildPacket(request))
                 # I need to fix this to read the header and the result size,
                 # as this may not read the full result set, but right now
                 # it should be fine...
                 result = self.client._recv(1024)
-                if not result and self.retry_on_empty:
-                    retries -= 1
-                    continue
+                while not result and time.time() - start_time < 10:
+                    result = self.client._recv(1024)
+                    time.sleep(0.05)
+
                 if _logger.isEnabledFor(logging.DEBUG):
                     _logger.debug("recv: " + " ".join([hex(ord(x)) for x in result]))
                 self.client.framer.processIncomingPacket(result, self.addTransaction)
